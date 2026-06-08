@@ -473,7 +473,7 @@ async def get_image_data(data: str, headers=None, trusted_base_url: str | None =
             if trusted_base_url and _is_same_origin(data, trusted_base_url):
                 log.debug(f'Skipping URL validation for trusted backend: {data}')
             else:
-                validate_url(data)
+                await asyncio.to_thread(validate_url, data)
             session = await get_session()
             async with session.get(
                 data,
@@ -850,7 +850,7 @@ async def image_edits(
                 # called only on the originally-submitted URL; following 3xx redirects
                 # without re-validation would let an attacker reach private IPs via a
                 # public host that redirects internally (e.g. cloud-metadata exfil).
-                validate_url(data)
+                await asyncio.to_thread(validate_url, data)
                 session = await get_session()
                 async with session.get(
                     data, ssl=AIOHTTP_CLIENT_SESSION_SSL, allow_redirects=AIOHTTP_CLIENT_ALLOW_REDIRECTS
