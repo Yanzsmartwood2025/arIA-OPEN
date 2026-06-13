@@ -59,7 +59,7 @@ async def get_image_base64_from_url(url: str, user=None) -> Optional[str]:
             # called only on the originally-submitted URL; following 3xx redirects
             # without re-validation would let an attacker reach private IPs via a
             # public host that redirects internally (e.g. cloud-metadata exfil).
-            validate_url(url)
+            await asyncio.to_thread(validate_url, url)
             # Download the image from the URL
             session = await get_session()
             async with session.get(
