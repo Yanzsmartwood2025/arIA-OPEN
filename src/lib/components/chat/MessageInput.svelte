@@ -1675,6 +1675,7 @@
 										<button
 											type="button"
 											id="input-menu-button"
+											aria-label={$i18n.t('Add files and more')}
 											class="bg-transparent hover:bg-gray-100 text-gray-700 dark:text-white dark:hover:bg-gray-800 rounded-full size-8 flex justify-center items-center outline-hidden focus:outline-hidden"
 											aria-label={$i18n.t('More')}
 										>
@@ -1717,6 +1718,7 @@
 											<button
 												type="button"
 												id="integration-menu-button"
+												aria-label={$i18n.t('Integrations')}
 												class="bg-transparent hover:bg-gray-100 text-gray-700 dark:text-white dark:hover:bg-gray-800 rounded-full size-8 flex justify-center items-center outline-hidden focus:outline-hidden"
 												aria-label={$i18n.t('Integrations')}
 											>
