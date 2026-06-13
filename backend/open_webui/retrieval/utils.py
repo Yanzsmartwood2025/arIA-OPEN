@@ -1244,7 +1244,7 @@ async def get_sources_from_items(
                     }
 
         elif item.get('type') == 'url':
-            content, docs = get_content_from_url(request, item.get('url'))
+            content, docs = await asyncio.to_thread(get_content_from_url, request, item.get('url'))
             if docs:
                 query_result = {
                     'documents': [[content]],
