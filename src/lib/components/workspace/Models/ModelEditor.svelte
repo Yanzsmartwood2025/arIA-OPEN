@@ -9,6 +9,7 @@
 	import { getSkills } from '$lib/apis/skills';
 	import { getFunctions } from '$lib/apis/functions';
 	import { getModelsDefaults } from '$lib/apis/configs';
+	import { getVoices } from '$lib/apis/audio';
 
 	import AdvancedParams from '$lib/components/chat/Settings/Advanced/AdvancedParams.svelte';
 	import Tags from '$lib/components/common/Tags.svelte';
@@ -29,7 +30,7 @@
 	import TerminalSelector from './TerminalSelector.svelte';
 	import AccessControlModal from '../common/AccessControlModal.svelte';
 	import LockClosed from '$lib/components/icons/LockClosed.svelte';
-	import { updateModelAccessGrants } from '$lib/apis/models';
+	import { updateModelAccessGrants, getModelTags } from '$lib/apis/models';
 
 	const i18n = getContext('i18n');
 
@@ -107,6 +108,8 @@
 	let accessGrants = [];
 	let terminalId = '';
 	let tts = { voice: '' };
+	let suggestionTags = [];
+	let voices = [];
 
 	const submitHandler = async () => {
 		loading = true;
@@ -252,6 +255,16 @@
 		await tools.set(await getTools(localStorage.token));
 		skillsList = (await getSkills(localStorage.token).catch(() => null)) ?? [];
 		await functions.set(await getFunctions(localStorage.token));
+
+		const modelTags = await getModelTags(localStorage.token).catch(() => null);
+		if (modelTags) {
+			suggestionTags = modelTags.map((t) => ({ name: t }));
+		}
+
+		const voicesRes = await getVoices(localStorage.token).catch(() => null);
+		if (voicesRes) {
+			voices = voicesRes.voices;
+		}
 
 		// Fetch admin-configured default model metadata so the editor
 		// reflects the actual defaults rather than hardcoded values
@@ -663,6 +676,7 @@
 								<div class="">
 									<Tags
 										tags={info?.meta?.tags ?? []}
+										{suggestionTags}
 										on:delete={(e) => {
 											const tagName = e.detail;
 											info.meta.tags = info.meta.tags.filter((tag) => tag.name !== tagName);
@@ -858,8 +872,15 @@
 							class="w-full text-sm bg-transparent outline-hidden"
 							type="text"
 							bind:value={tts.voice}
+							list="tts-voice-list"
 							placeholder={$i18n.t('e.g. alloy, echo, shimmer')}
 						/>
+
+						<datalist id="tts-voice-list">
+							{#each voices as v}
+								<option value={v.id}>{v.name}</option>
+							{/each}
+						</datalist>
 					</div>
 
 					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-4" />
