@@ -377,7 +377,12 @@ async def get_models(request: Request, user=Depends(get_verified_user)):
             model_node_id = None
 
             for node in request.app.state.config.COMFYUI_WORKFLOW_NODES:
-                if node['type'] == 'model':
+                # Support both old ('model') and new ('ClassName::key') type formats.
+                # A node is a model-loader if its key ends with '_name' (e.g. ckpt_name, unet_name).
+                node_type = node.get('type', '')
+                node_key = node.get('key', '')
+                is_model_node = node_type == 'model' or node_key.endswith('_name')
+                if is_model_node:
                     if node['node_ids']:
                         model_node_id = node['node_ids'][0]
                     break
@@ -433,6 +438,8 @@ class CreateImageForm(BaseModel):
     n: int = 1
     steps: int | None = None
     negative_prompt: str | None = None
+    seed: int | None = None
+    extra_params: dict | None = None
 
 
 GenerateImageForm = CreateImageForm  # Alias for backward compatibility
@@ -715,6 +722,12 @@ async def image_generations(
             if form_data.negative_prompt is not None:
                 data['negative_prompt'] = form_data.negative_prompt
 
+            if form_data.seed is not None:
+                data['seed'] = form_data.seed
+
+            if form_data.extra_params:
+                data['extra_params'] = form_data.extra_params
+
             form_data = ComfyUICreateImageForm(
                 **{
                     'workflow': ComfyUIWorkflow(
@@ -734,6 +747,15 @@ async def image_generations(
                 request.app.state.config.COMFYUI_API_KEY,
             )
             log.debug(f'res: {res}')
+
+            if res is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=ERROR_MESSAGES.DEFAULT(
+                        'ComfyUI image generation failed. Check that ComfyUI is running, '
+                        'the Base URL is correct, and the workflow is valid.'
+                    ),
+                )
 
             images = []
 
@@ -803,6 +825,7 @@ async def image_generations(
                 images.append({'url': url})
             return images
     except Exception as e:
+        log.exception(f'[image_generations] Unhandled exception: {e}')
         error = e
         if isinstance(e, aiohttp.ClientResponseError):
             error = e.message
@@ -817,6 +840,9 @@ class EditImageForm(BaseModel):
     n: int | None = None
     negative_prompt: str | None = None
     background: str | None = None
+    seed: int | None = None
+    steps: int | None = None
+    extra_params: dict | None = None
 
 
 @router.post('/edit')
@@ -1066,6 +1092,18 @@ async def image_edits(
                 **({'n': form_data.n} if form_data.n else {}),
             }
 
+            if form_data.negative_prompt is not None:
+                data['negative_prompt'] = form_data.negative_prompt
+
+            if form_data.seed is not None:
+                data['seed'] = form_data.seed
+
+            if form_data.steps is not None:
+                data['steps'] = form_data.steps
+
+            if form_data.extra_params:
+                data['extra_params'] = form_data.extra_params
+
             form_data = ComfyUIEditImageForm(
                 **{
                     'workflow': ComfyUIWorkflow(
@@ -1085,6 +1123,15 @@ async def image_edits(
                 request.app.state.config.IMAGES_EDIT_COMFYUI_API_KEY,
             )
             log.debug(f'res: {res}')
+
+            if res is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=ERROR_MESSAGES.DEFAULT(
+                        'ComfyUI image edit failed. Check that ComfyUI is running, '
+                        'the Base URL is correct, and the workflow is valid.'
+                    ),
+                )
 
             image_urls = set()
             for image in res['data']:
