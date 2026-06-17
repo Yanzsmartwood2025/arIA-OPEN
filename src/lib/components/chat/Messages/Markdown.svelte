@@ -1,18 +1,40 @@
-<script>
-	import { onDestroy } from 'svelte';
+<script context="module">
 	import { marked } from 'marked';
-	import { replaceTokens, processResponseContent } from '$lib/utils';
-	import { user } from '$lib/stores';
 
 	import markedExtension from '$lib/utils/marked/extension';
 	import markedKatexExtension from '$lib/utils/marked/katex-extension';
 	import { disableSingleTilde } from '$lib/utils/marked/strikethrough-extension';
 	import { mentionExtension } from '$lib/utils/marked/mention-extension';
 	import colonFenceExtension from '$lib/utils/marked/colon-fence-extension';
-
-	import MarkdownTokens from './Markdown/MarkdownTokens.svelte';
 	import footnoteExtension from '$lib/utils/marked/footnote-extension';
 	import citationExtension from '$lib/utils/marked/citation-extension';
+
+	const options = {
+		throwOnError: false,
+		breaks: true
+	};
+
+	marked.use(markedKatexExtension(options));
+	marked.use(markedExtension(options));
+	marked.use(citationExtension(options));
+	marked.use(footnoteExtension(options));
+	marked.use(colonFenceExtension(options));
+	marked.use(disableSingleTilde);
+	marked.use({
+		extensions: [
+			mentionExtension({ triggerChar: '@' }),
+			mentionExtension({ triggerChar: '#' }),
+			mentionExtension({ triggerChar: '$' })
+		]
+	});
+</script>
+
+<script>
+	import { onDestroy } from 'svelte';
+	import { replaceTokens, processResponseContent } from '$lib/utils';
+	import { user } from '$lib/stores';
+
+	import MarkdownTokens from './Markdown/MarkdownTokens.svelte';
 
 	export let id = '';
 	export let content;
@@ -41,24 +63,9 @@
 	let lastContent = '';
 	let lastParsedContent = '';
 
-	const options = {
-		throwOnError: false,
-		breaks: true
-	};
-
-	marked.use(markedKatexExtension(options));
-	marked.use(markedExtension(options));
-	marked.use(citationExtension(options));
-	marked.use(footnoteExtension(options));
-	marked.use(colonFenceExtension(options));
-	marked.use(disableSingleTilde);
-	marked.use({
-		extensions: [
-			mentionExtension({ triggerChar: '@' }),
-			mentionExtension({ triggerChar: '#' }),
-			mentionExtension({ triggerChar: '$' })
-		]
-	});
+	// Incremental lexing state: cache stable prefix tokens during streaming
+	let cachedStablePrefix = '';
+	let cachedStableTokens = [];
 
 	const parseTokens = () => {
 		if (content === lastContent) return;
@@ -68,7 +75,35 @@
 		if (processed === lastParsedContent) return;
 		lastParsedContent = processed;
 
-		tokens = marked.lexer(processed);
+		// When done or for short content, do a full lex for correctness
+		if (done || processed.length < 2000) {
+			cachedStablePrefix = '';
+			cachedStableTokens = [];
+			tokens = marked.lexer(processed);
+			return;
+		}
+
+		// Incremental lexing: find the last stable boundary (double newline)
+		// in the PREVIOUS content. Everything before it won't change as
+		// streaming only appends to the end.
+		const boundary = processed.lastIndexOf('\n\n');
+		if (boundary <= 0) {
+			tokens = marked.lexer(processed);
+			return;
+		}
+
+		const stablePrefix = processed.slice(0, boundary + 2);
+
+		// If the stable prefix changed, re-lex everything
+		if (stablePrefix !== cachedStablePrefix) {
+			cachedStablePrefix = stablePrefix;
+			cachedStableTokens = marked.lexer(stablePrefix);
+		}
+
+		// Only lex the volatile suffix (current paragraph being streamed)
+		const volatileSuffix = processed.slice(boundary + 2);
+		const suffixTokens = volatileSuffix ? marked.lexer(volatileSuffix) : [];
+		tokens = [...cachedStableTokens, ...suffixTokens];
 	};
 
 	const updateHandler = (content) => {
