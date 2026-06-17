@@ -235,6 +235,8 @@ type Settings = {
 	recentEmojis?: string[];
 	pinnedMenuItems?: string[];
 
+	defaultUploadContext?: 'full' | 'focused';
+
 	system?: string;
 	seed?: number;
 	temperature?: string;
