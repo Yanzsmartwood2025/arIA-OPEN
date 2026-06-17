@@ -3608,6 +3608,21 @@ async def streaming_chat_response_handler(response, ctx):
         task_id = str(uuid4())  # Create a unique task ID.
         model_id = form_data.get('model', '')
 
+        def build_assistant_message_update(**fields):
+            # Placeholder-repair fields only, each when authoritative;
+            # structural keys last so callers can't override them.
+            update = {
+                **fields,
+                'id': metadata['message_id'],
+                'role': 'assistant',
+            }
+            if model_id:
+                update['model'] = model_id
+            parent_id = metadata.get('user_message_id')
+            if parent_id:
+                update['parentId'] = parent_id
+            return update
+
         # Handle as a background task
         async def response_handler(response, events):
             def tag_output_handler(content_type, tags, output):
@@ -5129,24 +5144,24 @@ async def streaming_chat_response_handler(response, ctx):
                         await Chats.upsert_message_to_chat_by_id_and_message_id(
                             metadata['chat_id'],
                             metadata['message_id'],
-                            {
-                                'done': True,
-                                'content': serialize_output(output),
-                                'output': output,
+                            build_assistant_message_update(
+                                done=True,
+                                content=serialize_output(output),
+                                output=output,
                                 **({'usage': usage} if usage else {}),
-                            },
+                            ),
                         )
                     elif usage:
                         await Chats.upsert_message_to_chat_by_id_and_message_id(
                             metadata['chat_id'],
                             metadata['message_id'],
-                            {'done': True, 'usage': usage},
+                            build_assistant_message_update(done=True, usage=usage),
                         )
                     else:
                         await Chats.upsert_message_to_chat_by_id_and_message_id(
                             metadata['chat_id'],
                             metadata['message_id'],
-                            {'done': True},
+                            build_assistant_message_update(done=True),
                         )
 
                 # Send a webhook notification if the user is not active
@@ -5200,17 +5215,17 @@ async def streaming_chat_response_handler(response, ctx):
                             await Chats.upsert_message_to_chat_by_id_and_message_id(
                                 metadata['chat_id'],
                                 metadata['message_id'],
-                                {
-                                    'done': True,
-                                    'content': serialize_output(output),
-                                    'output': output,
-                                },
+                                build_assistant_message_update(
+                                    done=True,
+                                    content=serialize_output(output),
+                                    output=output,
+                                ),
                             )
                         else:
                             await Chats.upsert_message_to_chat_by_id_and_message_id(
                                 metadata['chat_id'],
                                 metadata['message_id'],
-                                {'done': True},
+                                build_assistant_message_update(done=True),
                             )
 
                 try:
