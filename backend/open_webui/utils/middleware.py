@@ -2620,19 +2620,36 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     # Otherwise, save any tools that filter inlets added for merging later.
     inlet_filter_tools = None if payload_tools is not None else form_data.get('tools', None)
 
-    # Skills — extract IDs from message content (<$skillId|label> tags) so
-    # persisted chats work without relying on the frontend to send skill_ids.
-    user_skill_ids = set(form_data.pop('skill_ids', None) or [])
-    user_skill_ids |= extract_skill_ids_from_messages(form_data.get('messages', []))
+    # Skills are surfaced two ways:
+    #  - $-mention tags (<$skillId|label>) in the message pull a skill's full content
+    #    into the chat immediately (extracted here so persisted chats work too).
+    #  - skill_ids (the integrations menu, where the frontend also pre-selects the
+    #    model's attached skills) plus the model's own attached skills are exposed as a
+    #    lightweight <available_skills> manifest, loaded on demand via view_skill.
+    mention_skill_ids = extract_skill_ids_from_messages(form_data.get('messages', []))
+    menu_skill_ids = set(form_data.pop('skill_ids', None) or [])
     model_skill_ids = set(model.get('info', {}).get('meta', {}).get('skillIds', []))
+    all_skill_ids = mention_skill_ids | menu_skill_ids | model_skill_ids
 
-    all_skill_ids = user_skill_ids | model_skill_ids
+    # The view_skill tool is only registered when builtin tools are injected (UI request +
+    # non-legacy function calling + builtin tools enabled; see the builtin tools block below
+    # and get_builtin_tools). When it can't be, manifest skills are injected as full content
+    # too so they stay usable. Keep this gate in sync with that block.
+    builtin_tools_enabled = (model.get('info', {}).get('meta', {}).get('capabilities') or {}).get(
+        'builtin_tools', True
+    )
+    has_session = bool(metadata.get('session_id'))
+    skills_lazy_load = (
+        has_session
+        and metadata.get('params', {}).get('function_calling') != 'legacy'
+        and builtin_tools_enabled
+    )
+
     available_skills = []
     if all_skill_ids:
         from open_webui.models.skills import Skills as SkillsModel
 
         accessible_skill_ids = {s.id for s in await SkillsModel.get_skills_by_user_id(user.id, 'read')}
-        available_skills = []
         for sid in all_skill_ids:
             if sid in accessible_skill_ids:
                 s = await SkillsModel.get_skill_by_id(sid)
@@ -2641,15 +2658,15 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
         skill_descriptions = ''
         for skill in available_skills:
-            if skill.id in user_skill_ids:
-                # User-selected: inject full content
+            # $-mentioned skills (and, when view_skill can't be registered, every skill)
+            # get full content injected; the rest are lightweight manifest entries.
+            if skill.id in mention_skill_ids or not skills_lazy_load:
                 form_data['messages'] = add_or_update_system_message(
                     f'<skill name="{skill.name}">\n{skill.content}\n</skill>',
                     form_data['messages'],
                     append=True,
                 )
             else:
-                # Model-attached: name+description only
                 skill_descriptions += f'<skill>\n<id>{skill.id}</id>\n<name>{skill.name}</name>\n<description>{skill.description or ""}</description>\n</skill>\n'
 
         if skill_descriptions:
@@ -2842,10 +2859,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         # Inject builtin tools for native function calling based on enabled features and model capability.
         # Only inject when the request originates from the UI (identified by session_id).
         # API callers don't expect hidden tools; they can explicitly request tools via tool_ids.
-        builtin_tools_enabled = (model.get('info', {}).get('meta', {}).get('capabilities') or {}).get(
-            'builtin_tools', True
-        )
-        has_session = bool(metadata.get('session_id'))
+        # builtin_tools_enabled / has_session were resolved with the skills above (they gate skills_lazy_load).
         if has_session and metadata.get('params', {}).get('function_calling') != 'legacy' and builtin_tools_enabled:
             # Add file context to user messages
             chat_id = metadata.get('chat_id')
@@ -2855,7 +2869,10 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 {
                     **extra_params,
                     '__event_emitter__': event_emitter,
-                    '__skill_ids__': [s.id for s in available_skills if s.id not in user_skill_ids],
+                    # This branch only runs when skills_lazy_load is True; $-mentioned
+                    # skills are injected as full content, the rest are manifest entries
+                    # the model loads via view_skill.
+                    '__skill_ids__': [s.id for s in available_skills if s.id not in mention_skill_ids],
                 },
                 features,
                 model,
