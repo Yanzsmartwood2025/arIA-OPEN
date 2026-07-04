@@ -48,7 +48,12 @@
 		deleteAllChats,
 		getChatListBySearchText
 	} from '$lib/apis/chats';
-	import { createNewFolder, getFolders, getSharedFolders, updateFolderParentIdById } from '$lib/apis/folders';
+	import {
+		createNewFolder,
+		getFolders,
+		getSharedFolders,
+		updateFolderParentIdById
+	} from '$lib/apis/folders';
 	import { createNewNote, getPinnedNoteList, toggleNotePinnedStatusById } from '$lib/apis/notes';
 	import { updateUserSettings } from '$lib/apis/users';
 	import { checkActiveChats } from '$lib/apis/tasks';
@@ -840,8 +845,8 @@
 					>
 						<div class=" self-center flex items-center justify-center size-9">
 							<img
-								src="{WEBUI_BASE_URL}/static/favicon.png"
-								class="sidebar-new-chat-icon size-6 rounded-full group-hover:hidden"
+								src="{WEBUI_BASE_URL}/assets/arIA-logo-source.png"
+								class="sidebar-new-chat-icon w-full px-1 group-hover:hidden"
 								alt=""
 							/>
 
@@ -1051,8 +1056,8 @@
 				>
 					<img
 						crossorigin="anonymous"
-						src="{WEBUI_BASE_URL}/static/favicon.png"
-						class="sidebar-new-chat-icon size-6 rounded-full"
+						src="{WEBUI_BASE_URL}/assets/arIA-logo-source.png"
+						class="sidebar-new-chat-icon w-full px-1"
 						alt=""
 					/>
 				</a>
@@ -1421,9 +1426,9 @@
 										folder_id: null,
 										created_at: item?.created_at ?? null,
 										updated_at: item?.updated_at ?? null
-										}
-									]);
-								}
+									}
+								]);
+							}
 
 							if (chat) {
 								console.log(chat);
