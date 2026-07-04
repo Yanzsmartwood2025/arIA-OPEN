@@ -262,8 +262,8 @@
 									<img
 										id="logo"
 										crossorigin="anonymous"
-										src="{WEBUI_BASE_URL}/static/favicon.png"
-										class="size-24 rounded-full"
+										src="{WEBUI_BASE_URL}/assets/arIA-logo-source.png"
+										class="w-48 h-auto"
 										alt="{$WEBUI_NAME} logo"
 									/>
 								</div>
@@ -614,8 +614,8 @@
 						<img
 							id="logo"
 							crossorigin="anonymous"
-							src="{WEBUI_BASE_URL}/static/favicon.png"
-							class=" w-6 rounded-full"
+							src="{WEBUI_BASE_URL}/assets/arIA-logo-source.png"
+							class=" w-24 h-auto"
 							alt=""
 						/>
 					</div>
